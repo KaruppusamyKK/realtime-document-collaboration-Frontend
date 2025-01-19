@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://localhost:8080';
+const BASE_URL = process.env.REACT_APP_BASE_BACKEND_URL;
 
 const instance = axios.create({
   baseURL: BASE_URL,
@@ -51,11 +51,34 @@ export const getDocuments = async (author) => {
 };
 
 
+export const allowDocumentAccess = async (accesInfo) => {
+  try {
+    const response = await instance.post('api/v1/doc-access/enable/docAccess', accesInfo);
+    return response.data; 
+  } catch (error) {
+    console.error("Error signing up:", error);
+    throw error;
+  }
+};
+
+export const readEnabledDocument = async (accesInfo) => {
+  try {
+    const response = await instance.post('api/v1/doc-access/documents/access-granted', accesInfo);
+    return response.data; 
+  } catch (error) {
+    console.error("Error signing up:", error);
+    throw error;
+  }
+};
+
+
 export const apiService = {
   login,
   signUp,
   saveDocuInfo,
-  getDocuments
+  getDocuments,
+  allowDocumentAccess,
+  readEnabledDocument
 };
 
 

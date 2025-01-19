@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button, TextField, Tabs, Tab, Box, Typography, Snackbar, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { apiService } from './Apis/ApiService';
+import { apiService } from '../Apis/ApiService';
 
 const LoginSignup = () => {
   const navigate = useNavigate();
