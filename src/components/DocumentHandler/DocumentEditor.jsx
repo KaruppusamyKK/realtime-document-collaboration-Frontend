@@ -87,8 +87,7 @@ const DocumentEditor = () => {
 
   const handleShare = async () => {
     console.log('Shared with emails:', emails);
-    // const link = "http://localhost:3000/granted-doc/";
-    const link = "https://dev-karuppusamy.netlify.app/granted-doc";
+    const link = process.env.REACT_APP_PROTECT_OR_OPEN_LINK;
     const url = `${link}?savedDocContent=${encodeURIComponent(editorContent)}&savedDocName=${encodeURIComponent(docName)}`;
     const professionalUrl = url.replace(/%20/g, '+');
     const requestData = {
@@ -104,8 +103,7 @@ const DocumentEditor = () => {
   };
 
   const handleCopyLink = () => {
-    // const link = "http://localhost:3000/granted-doc/";
-    const link = "https://dev-karuppusamy.netlify.app/granted-doc";
+    const link = process.env.REACT_APP_PROTECT_OR_OPEN_LINK;
     const url = `${link}?savedDocContent=${encodeURIComponent(editorContent)}&savedDocName=${encodeURIComponent(docName)}`;
     const professionalUrl = url.replace(/%20/g, '+');
 

@@ -61,6 +61,22 @@ export const sendDocumentsThroughEmail = async (documentData) => {
   }
 };
 
+export const hasAccessPermission = async (grantedTo, documentName) => {
+  try {
+    const response = await instance.get('/api/v1/doc-access/user/havePermission', {
+      params: {
+        grantedTo,       
+        documentName     
+      }
+    });
+    return response.data;  
+  } catch (error) {
+    console.error("Error:", error);  
+    throw error;  
+  }
+};
+
+
 
 
 export const apiService = {
@@ -68,7 +84,8 @@ export const apiService = {
   signUp,
   saveDocuInfo,
   getDocuments,
-  sendDocumentsThroughEmail
+  sendDocumentsThroughEmail,
+  hasAccessPermission
 
 };
 
