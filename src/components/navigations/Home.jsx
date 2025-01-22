@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
@@ -8,13 +8,18 @@ import {
   DialogTitle,
   TextField,
   IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from "@mui/material";
 import { apiService } from "../Apis/ApiService";
 import { useSnackbar } from "../utils/CustomSnackbar";
 import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css"; 
-import { ArrowBack, Save } from "@mui/icons-material"; 
-import DocumentViewer from "../DocumentHandler/DocumentViewer ";
+import "react-quill/dist/quill.snow.css";
+import { ArrowBack, Save } from "@mui/icons-material";
 
 const DriveLayout = () => {
   const storedUsername = localStorage.getItem("localStorageUsername");
@@ -23,13 +28,12 @@ const DriveLayout = () => {
   const [fileName, setFileName] = useState("");
   const [editorContent, setEditorContent] = useState("");
   const [openCreateDocDialog, setOpenCreateDocDialog] = useState(false);
+  const [documents, setDocuments] = useState([]);
 
   const logOut = () => {
     navigate("/");
     localStorage.removeItem("localStorageUsername");
   };
-
-
 
   const handleOpenCreateDocDialog = () => {
     setOpenCreateDocDialog(true);
@@ -51,7 +55,8 @@ const DriveLayout = () => {
         const response = await apiService.saveDocuInfo(documentData);
         if (response === true) {
           setSuccessSnackbarMessage("Document created successfully!");
-          // fetchDocuments();
+          // Fetch updated documents to ensure the new document is at the top
+          fetchDocuments(); // This ensures the documents list is updated after the new document is created
         } else {
           setFailureSnackbarMessage("Failed to create document.");
         }
@@ -65,9 +70,54 @@ const DriveLayout = () => {
     }
   };
 
+  const fetchDocuments = async () => {
+    try {
+      const response = await apiService.getDocuments(storedUsername);
+      // Update documents state by prepending the newly fetched list of documents
+      setDocuments(response || []);
+    } catch (error) {
+      console.error("Failed to fetch documents:", error);
+      setDocuments([]);
+    }
+  };
+
+  const decodeContent = (base64Content) => {
+    try {
+      if (base64Content && typeof base64Content === "string" && /^[A-Za-z0-9+/=]+$/.test(base64Content)) {
+        return atob(base64Content);
+      } else {
+        throw new Error("Invalid Base64 string");
+      }
+    } catch (error) {
+      console.error("Error decoding content:", error);
+      return "Invalid document content";
+    }
+  };
+
+  const handleDocumentClick = (docName, contentArray) => {
+    const decodedContent = decodeContent(contentArray[0]);
+    localStorage.setItem("editorDocName", docName);
+    localStorage.setItem("editorDocContent", decodedContent);
+    window.open("/editor", "_blank");
+  };
+
+  useEffect(() => {
+    if (storedUsername) {
+      fetchDocuments();
+    }
+  }, [storedUsername]);
+
   return (
     <div style={{ padding: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#f1f1f1", padding: "10px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          backgroundColor: "#f1f1f1",
+          padding: "10px",
+        }}
+      >
         <button
           style={{
             backgroundColor: "#4caf50",
@@ -106,7 +156,41 @@ const DriveLayout = () => {
       </div>
 
       <div style={{ marginTop: "20px" }}>
-        <DocumentViewer />
+        <div style={{ marginTop: "25px" }}></div>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell align="center">Name</TableCell>
+                <TableCell align="center">Last Edited By</TableCell>
+                <TableCell align="center">Activity</TableCell>
+                <TableCell align="center">Last Edited</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {documents.length > 0 ? (
+                documents.map((doc, index) => (
+                  <TableRow
+                    key={index}
+                    onClick={() => handleDocumentClick(doc.documentNameList, doc.docContent)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <TableCell align="center">{doc.documentNameList}</TableCell>
+                    <TableCell align="center">{storedUsername}</TableCell>
+                    <TableCell align="center">Hardcoded Activity</TableCell>
+                    <TableCell align="center">{doc.lastEdited}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={4} align="center">
+                    No documents available.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </div>
 
       {/* Dialog to create a new document */}
@@ -133,7 +217,7 @@ const DriveLayout = () => {
           <div style={{ marginTop: "20px", height: "400px" }}>
             <ReactQuill
               value={editorContent}
-              onChange={setEditorContent}  Update editor content state
+              onChange={setEditorContent}
               modules={{
                 toolbar: [
                   [{ header: "1" }, { header: "2" }, { font: [] }],
@@ -150,19 +234,10 @@ const DriveLayout = () => {
           </div>
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={handleCloseCreateDocDialog}
-            color="secondary"
-            style={{ marginRight: "10px" }}
-          >
+          <Button onClick={handleCloseCreateDocDialog} color="secondary" style={{ marginRight: "10px" }}>
             Cancel
           </Button>
-          <Button
-            onClick={handleSubmitCreateDoc}
-            color="primary"
-            startIcon={<Save />}
-            style={{ marginLeft: "10px" }}
-          >
+          <Button onClick={handleSubmitCreateDoc} color="primary" startIcon={<Save />} style={{ marginLeft: "10px" }}>
             Save Document
           </Button>
         </DialogActions>

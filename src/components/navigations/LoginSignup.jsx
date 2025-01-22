@@ -9,6 +9,7 @@ const LoginSignup = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openSnackbar, setOpenSnackbar] = useState(false);
@@ -16,18 +17,37 @@ const LoginSignup = () => {
 
   const toggleTab = (_, newValue) => setIsLogin(newValue === 0);
 
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleSignup = async () => {
+    if (!username || !password || !email) {
+      setError('All fields are mandatory.');
+      setSnackbarMessage('All fields are mandatory.');
+      setOpenSnackbar(true);
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      setError('Invalid email format.');
+      setSnackbarMessage('Invalid email format.');
+      setOpenSnackbar(true);
+      return;
+    }
+
     try {
-      const signupData = { username: username, password: password };
+      const signupData = { username, password, email };
       const response = await apiService.signUp(signupData);
-        if (response === true) {
+      if (response === true) {
         setSuccess('Signup successful!');
         setSnackbarMessage('Signup successful! You can now log in.');
         setOpenSnackbar(true);
         setTimeout(() => toggleTab(null, 0), 2000);
       } else if (response === false) {
-        setError('User already exists with the entered username!');
-        setSnackbarMessage('User already exists with the entered username!');
+        setError('User already exists with the entered username or email!');
+        setSnackbarMessage('User already exists with the entered username or email!');
         setOpenSnackbar(true);
       } else {
         setError('Something went wrong!');
@@ -36,8 +56,8 @@ const LoginSignup = () => {
       }
     } catch (err) {
       if (err.response && err.response.status === 409) {
-        setError('User already exists with the entered username!');
-        setSnackbarMessage('User already exists with the entered username!');
+        setError('User already exists with the entered username or email!');
+        setSnackbarMessage('User already exists with the entered username or email!');
         setOpenSnackbar(true);
       } else {
         setError('Error during signup');
@@ -46,22 +66,18 @@ const LoginSignup = () => {
       }
     }
   };
-  
-
-  
-  
 
   const handleLogin = async () => {
     try {
       const loginData = {
-        username: username,
-        password: password
+        username,
+        password,
       };
       const response = await apiService.login(loginData);
-      console.log("login ",response)
+      console.log("login ", response);
       if (response) {
         setSuccess('Login successful!');
-        navigate('/home'); 
+        navigate('/home');
         localStorage.setItem('localStorageUsername', username);
       } else {
         setError('Login failed! Please check your credentials.');
@@ -74,7 +90,6 @@ const LoginSignup = () => {
       setOpenSnackbar(true);
     }
   };
-  
 
   return (
     <Box sx={{ width: '100%', maxWidth: 500, margin: 'auto', padding: 3 }}>
@@ -101,6 +116,15 @@ const LoginSignup = () => {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
+        {!isLogin && (
+          <TextField
+            label="Email"
+            variant="outlined"
+            fullWidth
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        )}
 
         <Button
           variant="contained"

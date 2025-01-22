@@ -51,25 +51,16 @@ export const getDocuments = async (author) => {
 };
 
 
-export const allowDocumentAccess = async (accesInfo) => {
+export const sendDocumentsThroughEmail = async (documentData) => {
   try {
-    const response = await instance.post('api/v1/doc-access/enable/docAccess', accesInfo);
+    const response = await instance.post('/api/v1/doc-access/sendDocument/inEmail', documentData);
     return response.data; 
   } catch (error) {
-    console.error("Error signing up:", error);
+    console.error("Error :", error);
     throw error;
   }
 };
 
-export const readEnabledDocument = async (accesInfo) => {
-  try {
-    const response = await instance.post('api/v1/doc-access/documents/access-granted', accesInfo);
-    return response.data; 
-  } catch (error) {
-    console.error("Error signing up:", error);
-    throw error;
-  }
-};
 
 
 export const apiService = {
@@ -77,8 +68,8 @@ export const apiService = {
   signUp,
   saveDocuInfo,
   getDocuments,
-  allowDocumentAccess,
-  readEnabledDocument
+  sendDocumentsThroughEmail
+
 };
 
 

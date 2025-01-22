@@ -9,27 +9,24 @@ import IconButton from "@mui/material/IconButton";
 import PersonIcon from "@mui/icons-material/Person";
 import ShareIcon from "@mui/icons-material/Share";
 import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
 import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Avatar from "@mui/material/Avatar";
 import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import { useSnackbar } from "../utils/CustomSnackbar.jsx";
-import CryptoJS from "crypto-js";
+import { Chip } from "@mui/material";
+import { CopyAll as CopyAllIcon } from '@mui/icons-material';
 
 const DocumentEditor = () => {
   const [editorContent, setEditorContent] = useState("");
   const [docName, setDocName] = useState("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false); // New state for link modal
+  const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [shareOption, setShareOption] = useState("restricted");
-  const [shareableUrl, setShareableUrl] = useState(""); // New state for shareable link
   const { setSuccessSnackbarMessage, setFailureSnackbarMessage } = useSnackbar();
-
+  const [emails, setEmails] = useState([]);
+  const [emailInput, setEmailInput] = useState('');
   const storedUsername = localStorage.getItem("localStorageUsername");
 
   useEffect(() => {
@@ -44,22 +41,22 @@ const DocumentEditor = () => {
     }
   }, []);
 
-  const handleRealTimeUpdate = (updatedData) => {
-    if (updatedData.fileName === docName) {
-      setEditorContent(updatedData.content);
-    }
-  };
+
 
   const handleSave = async () => {
-    const encodedContent = btoa(editorContent);
-    const decodedContent = atob(encodedContent);
-
+    const textEncoder = new TextEncoder();
+    const textDecoder = new TextDecoder();
+  
+    // Encode content to base64
+    const encodedContent = btoa(String.fromCharCode(...textEncoder.encode(editorContent)));
+    const decodedContent = textDecoder.decode(Uint8Array.from(atob(encodedContent), c => c.charCodeAt(0)));
+  
     const documentData = {
       fileName: docName,
       authorName: storedUsername,
       content: decodedContent,
     };
-
+  
     const response = await apiService.saveDocuInfo(documentData);
     if (response === true) {
       setSuccessSnackbarMessage("Document created successfully!");
@@ -67,6 +64,7 @@ const DocumentEditor = () => {
       setFailureSnackbarMessage("Failed to create document.");
     }
   };
+  
 
   const toggleShareDialog = () => {
     setIsShareDialogOpen(!isShareDialogOpen);
@@ -76,29 +74,51 @@ const DocumentEditor = () => {
     setIsLinkDialogOpen(!isLinkDialogOpen);
   };
 
-  const handleShare = async () => {
-    const hasAccess = shareOption === "anyone";
-    const rawData = `${storedUsername}/${docName}/${email}`;
-    const encryptionKey = "karuppusamy";
-    const encryptedData = CryptoJS.AES.encrypt(rawData, encryptionKey).toString();
-    const generatedShareableUrl = `${process.env.REACT_APP_BASE_FRONTEND_URL}/granted-doc?token=${encodeURIComponent(encryptedData)}&hasAccess=${hasAccess}`;
-    setShareableUrl(generatedShareableUrl);
-    toggleShareDialog(); 
-    toggleLinkDialog(); 
-    const accessData = {
-      author: storedUsername,
-      documentName: docName,
-      hasAccess,
-      email,
-      documentUrl: generatedShareableUrl,
-    };
-    const response = await apiService.allowDocumentAccess(accessData);
-    if (response === true) {
-      setSuccessSnackbarMessage("Link share success!");
-    } else {
-      setFailureSnackbarMessage("Link share failure");
+  const handleAddEmail = () => {
+    if (emailInput && !emails.includes(emailInput)) {
+      setEmails([...emails, emailInput]);
+      setEmailInput('');
     }
-};
+  };
+
+  const handleDeleteEmail = (emailToDelete) => {
+    setEmails(emails.filter(email => email !== emailToDelete));
+  };
+
+  const handleShare = async () => {
+    console.log('Shared with emails:', emails);
+    // const link = "http://localhost:3000/granted-doc/";
+    const link = "https://dev-karuppusamy.netlify.app/granted-doc";
+    const url = `${link}?savedDocContent=${encodeURIComponent(editorContent)}&savedDocName=${encodeURIComponent(docName)}`;
+    const professionalUrl = url.replace(/%20/g, '+');
+    const requestData = {
+      documents: {
+        documentName: docName,
+        author: storedUsername,
+        documentUrl: professionalUrl,
+      },
+      emailLists: emails,
+    };
+    const response = await apiService.sendDocumentsThroughEmail(requestData);
+    toggleShareDialog();
+  };
+
+  const handleCopyLink = () => {
+    // const link = "http://localhost:3000/granted-doc/";
+    const link = "https://dev-karuppusamy.netlify.app/granted-doc";
+    const url = `${link}?savedDocContent=${encodeURIComponent(editorContent)}&savedDocName=${encodeURIComponent(docName)}`;
+    const professionalUrl = url.replace(/%20/g, '+');
+
+    navigator.clipboard.writeText(professionalUrl)
+      .then(() => {
+        console.log('Link copied to clipboard');
+      })
+      .catch((error) => {
+        console.error('Error copying link to clipboard:', error);
+      });
+    toggleShareDialog();
+  };
+
 
 
   if (!docName || !editorContent) {
@@ -131,54 +151,47 @@ const DocumentEditor = () => {
         </Toolbar>
       </AppBar>
 
+
+
       <Dialog open={isShareDialogOpen} onClose={toggleShareDialog}>
-        <div style={{ padding: "20px", width: "400px" }}>
-          <Typography variant="h6" style={{ marginBottom: "20px" }}>
+        <div style={{ padding: '20px', width: '400px' }}>
+          <Typography variant="h6" style={{ marginBottom: '20px' }}>
             Share "{docName}"
           </Typography>
-          <TextField
-            label="Add people, groups, and calendar events"
-            variant="outlined"
-            fullWidth
-            style={{ marginBottom: "20px" }}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <div style={{ marginBottom: "20px" }}>
-            <Typography variant="body2" style={{ marginBottom: "10px" }}>
-              General access
-            </Typography>
-            <Select
-              fullWidth
-              value={shareOption}
-              onChange={(e) => setShareOption(e.target.value)}
+          <div style={{ marginBottom: '20px' }}>
+            <TextField
+              label="Add people, groups, and calendar events"
               variant="outlined"
-            >
-              <MenuItem value="restricted">Restricted</MenuItem>
-              <MenuItem value="anyone">Anyone with the link</MenuItem>
-            </Select>
+              fullWidth
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' ? handleAddEmail() : null}
+            />
+            <div style={{ marginTop: '10px' }}>
+              {emails.map((email, index) => (
+                <Chip
+                  key={index}
+                  label={email}
+                  onDelete={() => handleDeleteEmail(email)}
+                  style={{ marginRight: '5px', marginTop: '5px' }}
+                />
+              ))}
+            </div>
           </div>
+          <IconButton onClick={handleCopyLink} style={{ marginBottom: '20px', fontSize: '12px' }}>
+            <CopyAllIcon style={{ fontSize: '20px' }} />
+            Copy Link
+          </IconButton>
           <Button
             variant="contained"
             color="primary"
             onClick={handleShare}
-            style={{ width: "100%" }}
+            style={{ width: '100%' }}
+            disabled={emails.length === 0}
           >
-            Done
+            Send link
           </Button>
         </div>
-      </Dialog>
-
-      <Dialog open={isLinkDialogOpen} onClose={toggleLinkDialog}>
-        <DialogTitle>Shareable Link</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">{shareableUrl}</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={toggleLinkDialog} color="primary">
-            Close
-          </Button>
-        </DialogActions>
       </Dialog>
 
       <div style={{ maxWidth: "800px", margin: "20px auto", padding: "20px" }}>
