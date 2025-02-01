@@ -1,32 +1,34 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { apiService } from "../Apis/ApiService.jsx";
-import AppBar from "@mui/material/AppBar";
-import Toolbar from "@mui/material/Toolbar";
-import Typography from "@mui/material/Typography";
-import IconButton from "@mui/material/IconButton";
-import PersonIcon from "@mui/icons-material/Person";
-import ShareIcon from "@mui/icons-material/Share";
-import Dialog from "@mui/material/Dialog";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import Avatar from "@mui/material/Avatar";
-import MenuItem from "@mui/material/MenuItem";
-import Select from "@mui/material/Select";
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Dialog,
+  TextField,
+  Button,
+  Chip,
+  Avatar,
+  Box,
+  Divider,
+} from "@mui/material";
+import { Share as ShareIcon, CopyAll as CopyAllIcon, Person as PersonIcon } from "@mui/icons-material";
 import { useSnackbar } from "../utils/CustomSnackbar.jsx";
-import { Chip } from "@mui/material";
-import { CopyAll as CopyAllIcon } from '@mui/icons-material';
+import SockJS from 'sockjs-client';
+import { Stomp } from '@stomp/stompjs';
 
 const DocumentEditor = () => {
   const [editorContent, setEditorContent] = useState("");
   const [docName, setDocName] = useState("");
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const [isLinkDialogOpen, setIsLinkDialogOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const { setSuccessSnackbarMessage, setFailureSnackbarMessage } = useSnackbar();
+  const [emailInput, setEmailInput] = useState("");
   const [emails, setEmails] = useState([]);
-  const [emailInput, setEmailInput] = useState('');
+  const [client, setClient] = useState(null);
+  const [message, setMessage] = useState(""); // For storing received message
+  const { setSuccessSnackbarMessage, setFailureSnackbarMessage } = useSnackbar();
   const storedUsername = localStorage.getItem("localStorageUsername");
 
   useEffect(() => {
@@ -37,194 +39,242 @@ const DocumentEditor = () => {
       setDocName(savedDocName);
       setEditorContent(savedDocContent);
     } else {
-      alert("No document data found.");
+      setDocName("Untitled Document");
     }
   }, []);
 
+  useEffect(() => {
+    // Establish WebSocket connection
+    const socket = new SockJS('http://localhost:8080/websocket');
+    const stompClient = Stomp.over(socket);
 
+    stompClient.connect({}, () => {
+      console.log('Connected to WebSocket');
+      setClient(stompClient);
+
+      // Subscribe to the topic to receive document updates
+      stompClient.subscribe('/document/send', (message) => {
+        if (message.body) {
+          const parsedMessage = JSON.parse(message.body);
+          setMessage(parsedMessage.body.lastEditedMessage);
+          setEditorContent(parsedMessage.body.lastEditedMessage); // Update the editor content
+        } else {
+          console.warn('Received empty message');
+        }
+      });
+    }, (error) => {
+      console.error('Error connecting to WebSocket:', error);
+    });
+
+    return () => {
+      if (stompClient.connected) {
+        stompClient.disconnect(() => console.log('WebSocket disconnected'));
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Send message to WebSocket when the editor content changes
+    if (client && editorContent !== message) {
+      const timer = setTimeout(() => {
+        client.send(
+          '/app/lastEdited', 
+          {}, 
+          JSON.stringify({
+            sender: storedUsername,
+            receiver: 'User2',  // Can be dynamically set if needed
+            lastEditedMessage: editorContent,
+            documentName: docName,
+          })
+        );
+      }, 200);  // Debounce mechanism to prevent excessive updates
+
+      return () => clearTimeout(timer);
+    }
+  }, [editorContent, client]);
 
   const handleSave = async () => {
-    const textEncoder = new TextEncoder();
-    const textDecoder = new TextDecoder();
-  
-    // Encode content to base64
-    const encodedContent = btoa(String.fromCharCode(...textEncoder.encode(editorContent)));
-    const decodedContent = textDecoder.decode(Uint8Array.from(atob(encodedContent), c => c.charCodeAt(0)));
-  
     const documentData = {
       fileName: docName,
       authorName: storedUsername,
-      content: decodedContent,
+      content: editorContent,
     };
-  
+
     const response = await apiService.saveDocuInfo(documentData);
     if (response === true) {
-      setSuccessSnackbarMessage("Document created successfully!");
+      setSuccessSnackbarMessage("Document saved successfully!");
     } else {
-      setFailureSnackbarMessage("Failed to create document.");
+      setFailureSnackbarMessage("Failed to save document.");
     }
   };
-  
 
   const toggleShareDialog = () => {
     setIsShareDialogOpen(!isShareDialogOpen);
   };
 
-  const toggleLinkDialog = () => {
-    setIsLinkDialogOpen(!isLinkDialogOpen);
-  };
-
   const handleAddEmail = () => {
     if (emailInput && !emails.includes(emailInput)) {
       setEmails([...emails, emailInput]);
-      setEmailInput('');
+      setEmailInput("");
     }
   };
 
   const handleDeleteEmail = (emailToDelete) => {
-    setEmails(emails.filter(email => email !== emailToDelete));
+    setEmails(emails.filter((email) => email !== emailToDelete));
+  };
+
+  const handleCopyLink = () => {
+    alert(editorContent)
+    const link = process.env.REACT_APP_PROTECT_OR_OPEN_LINK;
+    const url = `${link}?savedDocContent=${encodeURIComponent(
+      editorContent
+    )}&savedDocName=${encodeURIComponent(docName)}&isDocumentOpen=true`;
+    
+    navigator.clipboard.writeText(url)
+      .then(() => {
+        setSuccessSnackbarMessage("Link copied to clipboard!");
+      })
+      .catch(() => {
+        setFailureSnackbarMessage("Failed to copy link.");
+      });
   };
 
   const handleShare = async () => {
-    console.log('Shared with emails:', emails);
+    alert(editorContent);
     const link = process.env.REACT_APP_PROTECT_OR_OPEN_LINK;
-    const url = `${link}?savedDocContent=${encodeURIComponent(editorContent)}&savedDocName=${encodeURIComponent(docName)}`;
-    const professionalUrl = url.replace(/%20/g, '+');
+    const url = `${link}?savedDocContent=${encodeURIComponent(
+      editorContent
+    )}&savedDocName=${encodeURIComponent(docName)}`;
+
     const requestData = {
       documents: {
         documentName: docName,
         author: storedUsername,
-        documentUrl: professionalUrl,
+        documentUrl: url,
       },
       emailLists: emails,
     };
+
     const response = await apiService.sendDocumentsThroughEmail(requestData);
+    if (response === true) {
+      setSuccessSnackbarMessage("Document shared successfully!");
+    } else {
+      setFailureSnackbarMessage("Failed to share document.");
+    }
     toggleShareDialog();
   };
-
-  const handleCopyLink = () => {
-    const link = process.env.REACT_APP_PROTECT_OR_OPEN_LINK;
-    const url = `${link}?savedDocContent=${encodeURIComponent(editorContent)}&savedDocName=${encodeURIComponent(docName)}`;
-    const professionalUrl = url.replace(/%20/g, '+');
-
-    navigator.clipboard.writeText(professionalUrl)
-      .then(() => {
-        console.log('Link copied to clipboard');
-      })
-      .catch((error) => {
-        console.error('Error copying link to clipboard:', error);
-      });
-    toggleShareDialog();
-  };
-
-
-
-  if (!docName || !editorContent) {
-    return <p>Error: No document data provided.</p>;
-  }
 
   return (
-    <div style={{ fontFamily: "Arial, sans-serif" }}>
-      <AppBar position="static" style={{ backgroundColor: "#f1f3f4", color: "#000" }}>
+    <Box>
+      {/* Header */}
+      <AppBar position="static" style={{ backgroundColor: "#1a73e8" }}>
         <Toolbar style={{ display: "flex", justifyContent: "space-between" }}>
-          <Typography variant="h6" style={{ fontSize: "16px", fontWeight: "bold" }}>
+          <Typography variant="h6" style={{ fontWeight: "bold", color: "#fff" }}>
             {docName}
           </Typography>
-          <div style={{ display: "flex", alignItems: "center" }}>
+          <Box style={{ display: "flex", alignItems: "center" }}>
             <Button
               variant="contained"
-              color="primary"
+              color="secondary"
               onClick={handleSave}
               style={{ marginRight: "10px" }}
             >
               Save
             </Button>
-            <IconButton onClick={toggleShareDialog} style={{ marginRight: "10px" }}>
-              <ShareIcon titleAccess="Share" />
+            <IconButton
+              color="inherit"
+              onClick={toggleShareDialog}
+              style={{ marginRight: "10px" }}
+            >
+              <ShareIcon />
             </IconButton>
-            <IconButton>
-              <PersonIcon titleAccess={storedUsername || "Profile"} />
-            </IconButton>
-          </div>
+            <Avatar style={{ backgroundColor: "#f50057" }}>
+              {storedUsername?.charAt(0)?.toUpperCase() || "U"}
+            </Avatar>
+          </Box>
         </Toolbar>
       </AppBar>
 
-
-
-      <Dialog open={isShareDialogOpen} onClose={toggleShareDialog}>
-        <div style={{ padding: '20px', width: '400px' }}>
-          <Typography variant="h6" style={{ marginBottom: '20px' }}>
-            Share "{docName}"
-          </Typography>
-          <div style={{ marginBottom: '20px' }}>
-            <TextField
-              label="Add people, groups, and calendar events"
-              variant="outlined"
-              fullWidth
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' ? handleAddEmail() : null}
-            />
-            <div style={{ marginTop: '10px' }}>
-              {emails.map((email, index) => (
-                <Chip
-                  key={index}
-                  label={email}
-                  onDelete={() => handleDeleteEmail(email)}
-                  style={{ marginRight: '5px', marginTop: '5px' }}
-                />
-              ))}
-            </div>
-          </div>
-          <IconButton onClick={handleCopyLink} style={{ marginBottom: '20px', fontSize: '12px' }}>
-            <CopyAllIcon style={{ fontSize: '20px' }} />
-            Copy Link
-          </IconButton>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleShare}
-            style={{ width: '100%' }}
-            disabled={emails.length === 0}
-          >
-            Send link
-          </Button>
-        </div>
-      </Dialog>
-
-      <div style={{ maxWidth: "800px", margin: "20px auto", padding: "20px" }}>
+      {/* Editor */}
+      <Box style={{ 
+        maxWidth: "900px", 
+        margin: "20px auto", 
+        padding: "20px", 
+        borderRadius: "8px", 
+        boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.1)", 
+        backgroundColor: "#f9f9f9", 
+      }}>
         <ReactQuill
           theme="snow"
           value={editorContent}
           onChange={setEditorContent}
+          style={{ 
+            height: "400px", 
+            borderRadius: "8px", 
+            backgroundColor: "#fff", 
+            padding: "10px",
+          }}
           modules={{
-            toolbar: {
-              container: "#quill-toolbar",
-            },
+            toolbar: [
+              [{ 'header': '1' }, { 'header': '2' }, { 'font': [] }],
+              [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+              ['bold', 'italic', 'underline'],
+              ['link'],
+              [{ 'align': [] }],
+              ['image'],
+            ],
           }}
-          style={{ height: "400px", marginBottom: "50px" }}
         />
-        <div
-          id="quill-toolbar"
-          style={{
-            position: "absolute",
-            bottom: "501px",
-            width: "19%",
-            padding: "11px",
-            justifyContent: "center",
-            left: "260px",
-            border: "none",
-          }}
-        >
-          <button className="ql-bold" title="Bold"></button>
-          <button className="ql-italic" title="Italic"></button>
-          <button className="ql-underline" title="Underline"></button>
-          <button className="ql-link" title="Link"></button>
-          <button className="ql-list" value="bullet" title="Bullet List"></button>
-          <button className="ql-list" value="ordered" title="Numbered List"></button>
-        </div>
-      </div>
-    </div>
+      </Box>
+
+      {/* Share Dialog */}
+      <Dialog open={isShareDialogOpen} onClose={toggleShareDialog} fullWidth maxWidth="sm">
+        <Box padding={3}>
+          <Typography variant="h6" gutterBottom>
+            Share "{docName}"
+          </Typography>
+          <TextField
+            label="Enter email addresses"
+            variant="outlined"
+            fullWidth
+            value={emailInput}
+            onChange={(e) => setEmailInput(e.target.value)}
+            onKeyDown={(e) => (e.key === "Enter" ? handleAddEmail() : null)}
+            style={{ marginBottom: "15px" }}
+          />
+          <Box style={{ marginBottom: "15px" }}>
+            {emails.map((email, index) => (
+              <Chip
+                key={index}
+                label={email}
+                onDelete={() => handleDeleteEmail(email)}
+                style={{ marginRight: "5px", marginBottom: "5px" }}
+                color="primary"
+              />
+            ))}
+          </Box>
+          <Divider style={{ margin: "15px 0" }} />
+          <Box style={{ display: "flex", justifyContent: "space-between" }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleCopyLink}
+              startIcon={<CopyAllIcon />}
+            >
+              Copy Link
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleShare}
+              disabled={emails.length === 0}
+            >
+              Share
+            </Button>
+          </Box>
+        </Box>
+      </Dialog>
+    </Box>
   );
 };
 

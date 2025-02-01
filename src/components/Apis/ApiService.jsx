@@ -77,6 +77,38 @@ export const hasAccessPermission = async (grantedTo, documentName) => {
 };
 
 
+export const handleDeleteDoc = async (documentName, author) => {
+  try {
+    const response = await instance.post('/api/v1/doc/delete/doc', null, {
+      params: {
+        documentName: documentName,
+        author: author
+      }
+    });
+    return response.data;  
+  } catch (error) {
+    console.error("Error:", error);  
+    throw error;  
+  }
+};
+
+
+export const handleRenameDoc = async (documentName, newDocumentName,author) => {
+  try {
+    const response = await instance.post('/api/v1/doc/rename/doc', null, {
+      params: {
+        documentName: documentName,
+        newDocumentName : newDocumentName,
+        author: author
+      }
+    });
+    return response.data;  
+  } catch (error) {
+    console.error("Error:", error);  
+    throw error;  
+  }
+};
+
 
 
 export const apiService = {
@@ -85,7 +117,9 @@ export const apiService = {
   saveDocuInfo,
   getDocuments,
   sendDocumentsThroughEmail,
-  hasAccessPermission
+  hasAccessPermission,
+  handleDeleteDoc,
+  handleRenameDoc
 
 };
 
