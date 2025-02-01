@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiService } from "../Apis/ApiService.jsx";
 import '../css/GrantedDocumentAccessor.css';
+
 const GrantedDocumentAccessor = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -12,10 +13,10 @@ const GrantedDocumentAccessor = () => {
   useEffect(() => {
     const fetchData = async () => {
       const urlParams = new URLSearchParams(location.search);
-      const savedDocContent = urlParams.get('savedDocContent');
-      const savedDocName = urlParams.get('savedDocName');
+      const savedDocContent = urlParams.get('savedDocContent') || '';
+      const savedDocName = urlParams.get('savedDocName') || ''; 
 
-      const localStorageUsername = localStorage.getItem('localStorageUsername');
+      const localStorageUsername = localStorage.getItem('localStorageUsername') || '';
       console.log("Username accessing the document:", localStorageUsername);
 
       try {
